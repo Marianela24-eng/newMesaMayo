@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Mesa de Mayo - Juego Educativo</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(-25%);
+                animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+            }
+            50% {
+                transform: translateY(0);
+                animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+            }
+        }
+        .animate-bounce {
+            animation: bounce 1s infinite;
+        }
+        .instrument-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+            display: block;
+        }
+        .instrument-image-placed {
+            /* Quitar fondo blanco - método más agresivo */
+            mix-blend-mode: multiply;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)) contrast(1.2) brightness(1.1) saturate(1.1);
+        }
+        /* Contenedor con fondo blanco para que multiply funcione */
+        .instrument-container-white {
+            background-color: white;
+        }
+        /* Rotación horizontal para tijeras y pinzas - Aplicar directamente a la imagen */
+        .instrument-image.rotate-horizontal {
+            transform: rotate(90deg) scale(1.1) !important;
+            -webkit-transform: rotate(90deg) scale(1.1) !important;
+            -ms-transform: rotate(90deg) scale(1.1) !important;
+            -o-transform: rotate(90deg) scale(1.1) !important;
+            transform-origin: center center !important;
+            -webkit-transform-origin: center center !important;
+            -ms-transform-origin: center center !important;
+        }
+        .instrument-image.rotate-horizontal-large {
+            transform: rotate(90deg) scale(1.3) !important;
+            -webkit-transform: rotate(90deg) scale(1.3) !important;
+            -ms-transform: rotate(90deg) scale(1.3) !important;
+            -o-transform: rotate(90deg) scale(1.3) !important;
+            transform-origin: center center !important;
+            -webkit-transform-origin: center center !important;
+            -ms-transform-origin: center center !important;
+        }
+        .dragging {
+            opacity: 0.6;
+            transform: scale(0.95);
+        }
+        .scroll-container {
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+        .scroll-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* Prevenir menú contextual en imágenes en móviles */
+        img {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: none;
+            touch-action: none;
+        }
+        /* Permitir interacción solo en contenedores arrastrables */
+        [draggable="true"] img {
+            pointer-events: auto;
+        }
+        [draggable="true"] {
+            cursor: move;
+            -webkit-user-drag: element;
+        }
+        [draggable="false"] {
+            cursor: not-allowed;
+        }
+        @media (max-width: 768px) {
+            .mobile-text-sm {
+                font-size: 0.875rem;
+            }
+            .mobile-p-2 {
+                padding: 0.5rem;
+            }
+        }
+        @media (max-width: 640px) {
+            .instrument-image {
+                max-width: 100%;
+                max-height: 100%;
+            }
+        }
+        .instrument-container {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        @media (orientation: landscape) and (max-height: 600px) {
+            .landscape-compact {
+                padding: 0.5rem;
+            }
+            .landscape-compact h2 {
+                font-size: 0.875rem;
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <noscript>
+        <div style="padding: 20px; text-align: center; background: red; color: white; font-size: 24px;">
+            ⚠️ JavaScript está deshabilitado. Por favor, habilítalo para jugar.
+        </div>
+    </noscript>
+
+    <script type="text/babel">
+        // Verificar que React esté cargado
+        if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 40px; text-align: center; background: #fee; border: 3px solid red; margin: 20px; border-radius: 10px;">
+                    <h1 style="color: red; font-size: 32px;">⚠️ Error: React no se cargó</h1>
+                    <p style="font-size: 18px; margin: 20px 0;">Por favor, verifica tu conexión a internet y recarga la página.</p>
+                    <p style="font-size: 14px; color: #666;">Si el problema persiste, verifica la consola del navegador (F12) para más detalles.</p>
+                </div>
+            `;
+            throw new Error('React no está disponible');
+        }
+        
+        const { useState, useEffect, useRef } = React;
+
+        const Heart = (props) => <span style={{ fontSize: props.size || 24 }}>❤️</span>;
+        const Trophy = (props) => <span style={{ fontSize: props.size || 24 }}>🏆</span>;
+        const Clock = (props) => <span style={{ fontSize: props.size || 24 }}>⏰</span>;
+        const HelpCircle = (props) => <span style={{ fontSize: props.size || 24 }}>❓</span>;
+        const Play = (props) => <span style={{ fontSize: props.size || 24 }}>▶️</span>;
+        const RotateCcw = (props) => <span style={{ fontSize: props.size || 24 }}>🔄</span>;
+        const X = (props) => <span style={{ fontSize: props.size || 24 }}>✖️</span>;
+
+        const MesaMayoGame = () => {
+            const [gameStarted, setGameStarted] = useState(false);
+            const [score, setScore] = useState(0);
+            const [lives, setLives] = useState(3);
+            const [timeLeft, setTimeLeft] = useState(120);
+            const [currentInstrumentIndex, setCurrentInstrumentIndex] = useState(0);
+            const [placedInstruments, setPlacedInstruments] = useState([]);
+            const [placedNames, setPlacedNames] = useState({}); // { position: instrumentName }
+            const [draggedItem, setDraggedItem] = useState(null);
+            const [draggedName, setDraggedName] = useState(null);
+            const [showHelp, setShowHelp] = useState(false);
+            const [gameOver, setGameOver] = useState(false);
+            const [errorMessage, setErrorMessage] = useState(null);
+            const [successMessage, setSuccessMessage] = useState(null);
+            const [draggingId, setDraggingId] = useState(null);
+            const [draggingNameId, setDraggingNameId] = useState(null);
+            const [showQuestion, setShowQuestion] = useState(false);
+            const [questionData, setQuestionData] = useState(null);
+            const [musicPlaying, setMusicPlaying] = useState(false);
+            const [hasAudio, setHasAudio] = useState(false);
+            const mesaRef = useRef(null);
+            const audioRef = useRef(null);
+
+            // Verificar si hay audio disponible
+            useEffect(() => {
+                if (audioRef.current) {
+                    const checkAudio = () => {
+                        if (audioRef.current.readyState >= 2) {
+                            setHasAudio(true);
+                        } else {
+                            setHasAudio(false);
+                        }
+                    };
+                    
+                    audioRef.current.addEventListener('loadeddata', checkAudio);
+                    audioRef.current.addEventListener('canplay', checkAudio);
+                    audioRef.current.addEventListener('error', () => {
+                        setHasAudio(false);
+                    });
+                    
+                    // Verificar después de un momento
+                    setTimeout(checkAudio, 1000);
+                    
+                    return () => {
+                        if (audioRef.current) {
+                            audioRef.current.removeEventListener('loadeddata', checkAudio);
+                            audioRef.current.removeEventListener('canplay', checkAudio);
+                        }
+                    };
+                }
+            }, []);
+
+            // Preguntas para recuperar vidas
+            const questions = [
+                {
+                    question: "¿Cuál es el criterio principal de organización en la Mesa de Mayo?",
+                    options: ["Ordenar según el momento en el que se usarán", "Ordenar por tipo de cirugía", "Ordenar por color", "Ordenar por tamaño"],
+                    correct: 0
+                },
+                {
+                    question: "¿Cuál es el instrumento principal para realizar la incisión inicial?",
+                    options: ["Pinza de Kelly", "Bisturí con hoja", "Tijera de Mayo", "Pinza de Ailis", "Gasas"],
+                    correct: 1
+                },
+                {
+                    question: "¿Cuál es el propósito de la pinza de Kelly?",
+                    options: ["Sujetar gasas", "Cortar tejidos", "Hemostasia", "Exponer tejidos", "Separar tejidos blandos"],
+                    correct: 2
+                },
+                {
+                    question: "¿Qué instrumento se utiliza para separar bordes de incisión?",
+                    options: ["Allis", "Adson sin dientes", "Farabeuf", "Kelly", "TIjera de Mayo"],
+                    correct: 2
+                },
+                {
+                    question: "¿Cuál es la función principal de la mesa de Mayo?",
+                    options: ["Sostener los campos estériles usados", "Facilitar el acceso inmediato al instrumental crítico durante la cirugía", "Guardar los instrumentos sucios", "Proteger las suturas del ambiente"],
+                    correct: 2
+                }
+            ];
+
+            const instrumentsData = [
+            { 
+                id: 9, 
+                name: 'Pinza de anillos y de campo', 
+                position: 'anillos-campo', 
+                image: 'anillos.png',
+                category: 'CAMPO',
+                order: 1
+            },
+            { 
+                id: 2, 
+                name: 'Tijera de Mayo', 
+                position: 'mesa-top-2', 
+                image: 'tijera_mayo.png',
+                category: 'CORTE',
+                order: 2
+            },
+            { 
+                id: 6, 
+                name: 'Recipiente con gasas', 
+                position: 'gasas-container', 
+                image: 'gasas.png',
+                category: 'MATERIAL',
+                order: 3
+            },
+            { 
+                id: 7, 
+                name: 'Pinzas con dientes', 
+                position: 'dientes-top', 
+                image: 'dientes.png',
+                category: 'CORTE',
+                order: 4
+            },
+            { 
+                id: 8, 
+                name: 'Separador de Farabeuf', 
+                position: 'separador-bottom', 
+                image: 'separador.png',
+                category: 'EXPOSICIÓN',
+                order: 5
+            },
+            { 
+                id: 1, 
+                name: 'Bisturí con hoja', 
+                position: 'mesa-top-1', 
+                image: 'bisturi_hojas.png',
+                category: 'CORTE',
+                order: 6
+            },
+            { 
+                id: 4, 
+                name: 'Pinza de Ailis', 
+                position: 'mesa-top-4', 
+                image: 'ailis.png',
+                category: 'TRACCIÓN',
+                order: 7
+            },
+            { 
+                id: 3, 
+                name: 'Pinza de Kelly', 
+                position: 'mesa-top-3', 
+                image: 'kelly.png',
+                category: 'HEMOSTASIA',
+                order: 8
+            },
+            { 
+                id: 5, 
+                name: 'Portaagujas', 
+                position: 'mesa-top-5', 
+                image: 'portaguja.png',
+                category: 'SUTURA',
+                order: 9
+            },
+        ];
+            // Posiciones exactas - 5 elementos en barra azul, sin nombres ni categorías
+            const positions = {
+                // Mesa de Mayo (barra azul horizontal arriba) - 5 posiciones en una fila
+                // Reducimos la altura para dejar más espacio para los nombres
+                'mesa-top-1': { x: 1, y: 2, width: 19, height: 18 },
+                'mesa-top-2': { x: 21, y: 2, width: 19, height: 18 },
+                'mesa-top-3': { x: 41, y: 2, width: 19, height: 18 },
+                'mesa-top-4': { x: 61, y: 2, width: 19, height: 18 },
+                'mesa-top-5': { x: 81, y: 2, width: 17, height: 18 },
+                
+                // Gasas (abajo de Bisturí, lado izquierdo) - Con espacio para el nombre
+                'gasas-container': { x: 1, y: 22, width: 19, height: 25 },
+                
+                // Pinzas con dientes (al lado de gasas, abajo de Tijera de Mayo)
+                'dientes-top': { x: 21, y: 22, width: 19, height: 25 },
+                
+                // Separador (abajo de Pinzas con dientes) - Con espacio para el nombre
+                'separador-bottom': { x: 21, y: 49, width: 19, height: 25 },
+                
+                // Pinza de anillos y de campo (combinadas) - Con espacio para el nombre
+                'anillos-campo': { x: 61, y: 22, width: 37, height: 52 },
+            };
+
+            // Zonas para nombres (debajo de cada instrumento) - Con más margen para no superponerse
+            const namePositions = {
+                'mesa-top-1': { x: 1, y: 21.5, width: 19, height: 5 }, // Más espacio para el bisturí
+                'mesa-top-2': { x: 21, y: 21, width: 19, height: 5 },
+                'mesa-top-3': { x: 41, y: 21, width: 19, height: 5 },
+                'mesa-top-4': { x: 61, y: 21, width: 19, height: 5 },
+                'mesa-top-5': { x: 81, y: 21, width: 17, height: 5 },
+                'gasas-container': { x: 1, y: 48, width: 19, height: 5 },
+                'dientes-top': { x: 21, y: 48, width: 19, height: 5 },
+                'separador-bottom': { x: 21, y: 75, width: 19, height: 5 },
+                'anillos-campo': { x: 61, y: 75, width: 37, height: 5 },
+            };
+
+            // Timer
+            useEffect(() => {
+                if (gameStarted && !gameOver && timeLeft > 0) {
+                    const timer = setInterval(() => {
+                        setTimeLeft(prev => {
+                            if (prev <= 1) {
+                                setGameOver(true);
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                    return () => clearInterval(timer);
+                }
+            }, [gameStarted, gameOver, timeLeft]);
+
+            // Limpiar mensajes
+            useEffect(() => {
+                if (errorMessage) {
+                    const timer = setTimeout(() => setErrorMessage(null), 3000);
+                    return () => clearTimeout(timer);
+                }
+            }, [errorMessage]);
+
+            useEffect(() => {
+                if (successMessage) {
+                    const timer = setTimeout(() => setSuccessMessage(null), 2000);
+                    return () => clearTimeout(timer);
+                }
+            }, [successMessage]);
+
+            const handleDragStart = (e, instrument) => {
+                if (gameOver || showQuestion) {
+                    e.preventDefault();
+                    return;
+                }
+                if (instrument.order !== currentInstrumentIndex + 1) {
+                    e.preventDefault();
+                    setErrorMessage(` INCORRECTO - Orden equivocado`);
+                    return;
+                }
+                setDraggedItem(instrument);
+                setDraggingId(instrument.id);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', instrument.id.toString());
+            };
+
+            const handleDragEnd = () => {
+                setDraggedItem(null);
+                setDraggingId(null);
+            };
+
+            const handleNameDragEnd = () => {
+                setDraggedName(null);
+                setDraggingNameId(null);
+            };
+
+            const handleTouchStart = (e, instrument) => {
+                if (gameOver || showQuestion) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+                if (instrument.order !== currentInstrumentIndex + 1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setErrorMessage(`INCORRECTO - Orden equivocado`);
+                    return false;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                setDraggedItem(instrument);
+                setDraggingId(instrument.id);
+                return false;
+            };
+
+            const handleTouchEnd = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                setDraggedItem(null);
+                setDraggingId(null);
+            };
+
+            const handleNameTouchEnd = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                setDraggedName(null);
+                setDraggingNameId(null);
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            };
+
+            const handleDrop = (e, targetPosition) => {
+                e.preventDefault();
+                if (!draggedItem || gameOver) {
+                    setDraggedItem(null);
+                    setDraggingId(null);
+                    return;
+                }
+
+                if (draggedItem.order !== currentInstrumentIndex + 1) {
+                    setErrorMessage(` INCORRECTO - Orden equivocado`);
+                    setDraggedItem(null);
+                    setDraggingId(null);
+                    return;
+                }
+
+                // Obtener coordenadas del drop
+                const correctPosition = draggedItem.position;
+                let isCorrect = false;
+                
+                if (mesaRef.current) {
+                    const rect = mesaRef.current.getBoundingClientRect();
+                    const dropX = ((e.clientX - rect.left) / rect.width) * 100;
+                    const dropY = ((e.clientY - rect.top) / rect.height) * 100;
+                    
+                    // Verificar si está en la zona correcta o cerca (margen de error amplio)
+                    const correctPos = positions[correctPosition];
+                    if (correctPos) {
+                        // Verificar si el drop está dentro del área de la posición correcta (con margen)
+                        const margin = 5; // 5% de margen en cada lado
+                        const isInCorrectZone = 
+                            dropX >= (correctPos.x - margin) && 
+                            dropX <= (correctPos.x + correctPos.width + margin) &&
+                            dropY >= (correctPos.y - margin) && 
+                            dropY <= (correctPos.y + correctPos.height + margin);
+                        
+                        if (isInCorrectZone) {
+                            isCorrect = true;
+                        } else {
+                            // También verificar por distancia al centro (margen más amplio)
+                            const centerX = correctPos.x + correctPos.width / 2;
+                            const centerY = correctPos.y + correctPos.height / 2;
+                            const distance = Math.sqrt(Math.pow(dropX - centerX, 2) + Math.pow(dropY - centerY, 2));
+                            
+                            // Margen de error muy amplio (hasta 20% de distancia)
+                            if (distance < 20) {
+                                isCorrect = true;
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: verificar por posición del target
+                    isCorrect = correctPosition === targetPosition;
+                }
+
+                if (isCorrect) {
+                    setPlacedInstruments(prev => [...prev, draggedItem]);
+                    setCurrentInstrumentIndex(prev => prev + 1);
+                    setSuccessMessage(` ¡Correcto!`);
+                    
+                    if (placedInstruments.length === 9) {
+                        setScore(prev => prev + 1);
+                    }
+                } else {
+                    setLives(prev => {
+                        const newLives = prev - 1;
+                        if (newLives <= 0) {
+                            setErrorMessage(` INCORRECTO - Lugar equivocado. Te quedan 0 vidas`);
+                            const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+                            setQuestionData(randomQuestion);
+                            setShowQuestion(true);
+                            return 0;
+                        } else {
+                            setErrorMessage(` INCORRECTO - Lugar equivocado. Te quedan ${newLives} ${newLives === 1 ? 'vida' : 'vidas'}`);
+                        }
+                        return newLives;
+                    });
+                }
+                setDraggedItem(null);
+                setDraggingId(null);
+            };
+
+            const handleNameDragStart = (e, instrumentName, instrumentId) => {
+                if (gameOver || showQuestion) {
+                    e.preventDefault();
+                    return;
+                }
+                setDraggedName(instrumentName);
+                setDraggingNameId(instrumentId);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', instrumentId.toString());
+            };
+
+            const handleNameTouchStart = (e, instrumentName, instrumentId) => {
+                if (gameOver || showQuestion) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                setDraggedName(instrumentName);
+                setDraggingNameId(instrumentId);
+                return false;
+            };
+
+            const handleNameDrop = (e, targetPosition) => {
+                e.preventDefault();
+                if (!draggedName || !draggingNameId || gameOver) {
+                    setDraggedName(null);
+                    setDraggingNameId(null);
+                    return;
+                }
+
+                // Obtener coordenadas del drop
+                const instrument = instrumentsData.find(inst => inst.id === draggingNameId);
+                const correctPosition = instrument.position;
+                let isCorrect = false;
+                
+                if (mesaRef.current) {
+                    const rect = mesaRef.current.getBoundingClientRect();
+                    const dropX = ((e.clientX - rect.left) / rect.width) * 100;
+                    const dropY = ((e.clientY - rect.top) / rect.height) * 100;
+                    
+                    // Verificar que el instrumento esté colocado primero
+                    const isInstrumentPlaced = placedInstruments.find(inst => inst.position === correctPosition);
+                    
+                    if (!isInstrumentPlaced) {
+                        setErrorMessage(`INCORRECTO - Lugar equivocado`);
+                        setDraggedName(null);
+                        setDraggingNameId(null);
+                        return;
+                    }
+                    
+                    // Verificar si está en la zona correcta o cerca (margen de error amplio)
+                    const correctNamePos = namePositions[correctPosition];
+                    if (correctNamePos) {
+                        // Verificar si el drop está dentro del área de la posición correcta (con margen)
+                        const margin = 5; // 5% de margen en cada lado
+                        const isInCorrectZone = 
+                            dropX >= (correctNamePos.x - margin) && 
+                            dropX <= (correctNamePos.x + correctNamePos.width + margin) &&
+                            dropY >= (correctNamePos.y - margin) && 
+                            dropY <= (correctNamePos.y + correctNamePos.height + margin);
+                        
+                        if (isInCorrectZone) {
+                            isCorrect = true;
+                        } else {
+                            // También verificar por distancia al centro (margen más amplio)
+                            const centerX = correctNamePos.x + correctNamePos.width / 2;
+                            const centerY = correctNamePos.y + correctNamePos.height / 2;
+                            const distance = Math.sqrt(Math.pow(dropX - centerX, 2) + Math.pow(dropY - centerY, 2));
+                            
+                            // Margen de error muy amplio (hasta 20% de distancia)
+                            if (distance < 20) {
+                                isCorrect = true;
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: verificar por posición del target
+                    const isInstrumentPlaced = placedInstruments.find(inst => inst.position === targetPosition);
+                    if (!isInstrumentPlaced) {
+                        setErrorMessage(`INCORRECTO - Lugar equivocado`);
+                        setDraggedName(null);
+                        setDraggingNameId(null);
+                        return;
+                    }
+                    isCorrect = correctPosition === targetPosition;
+                }
+
+                if (isCorrect) {
+                    setPlacedNames(prev => ({ ...prev, [correctPosition]: draggedName }));
+                    setScore(prev => prev + 1);
+                    setSuccessMessage(` ¡Correcto!`);
+                    
+                    const newPlacedNames = {...placedNames, [correctPosition]: draggedName};
+                    if (placedInstruments.length === 9 && Object.keys(newPlacedNames).length === 9) {
+                        setTimeout(() => setGameOver(true), 500);
+                    }
+                } else {
+                    setLives(prev => {
+                        const newLives = prev - 1;
+                        if (newLives <= 0) {
+                            setErrorMessage(` INCORRECTO - Lugar equivocado. Te quedan 0 vidas`);
+                            const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+                            setQuestionData(randomQuestion);
+                            setShowQuestion(true);
+                            return 0;
+                        } else {
+                            setErrorMessage(` INCORRECTO - Lugar equivocado. Te quedan ${newLives} ${newLives === 1 ? 'vida' : 'vidas'}`);
+                        }
+                        return newLives;
+                    });
+                }
+                setDraggedName(null);
+                setDraggingNameId(null);
+            };
+
+            const handleQuestionAnswer = (selectedIndex) => {
+                if (!questionData) return;
+                
+                if (selectedIndex === questionData.correct) {
+                    setLives(1);
+                    setSuccessMessage(' ¡Correcto! Has recuperado una vida');
+                    setShowQuestion(false);
+                    setQuestionData(null);
+                } else {
+                    setGameOver(true);
+                    setShowQuestion(false);
+                    setQuestionData(null);
+                }
+            };
+
+            const startGame = () => {
+                setGameStarted(true);
+                setScore(0);
+                setLives(3);
+                setTimeLeft(120);
+                setGameOver(false);
+                setPlacedInstruments([]);
+                setPlacedNames({});
+                setCurrentInstrumentIndex(0);
+                setErrorMessage(null);
+                setSuccessMessage(null);
+                setDraggedItem(null);
+                setDraggedName(null);
+                setDraggingId(null);
+                setDraggingNameId(null);
+                setShowQuestion(false);
+                setQuestionData(null);
+                
+                // Iniciar música de fondo (si está disponible)
+                if (audioRef.current) {
+                    audioRef.current.loop = true;
+                    audioRef.current.volume = 0.6; // Volumen aumentado
+                    const playPromise = audioRef.current.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            setMusicPlaying(true);
+                        }).catch(() => {
+                            // Si falla el autoplay, el usuario puede iniciarlo manualmente con el botón
+                            setMusicPlaying(false);
+                        });
+                    }
+                }
+            };
+
+            const resetGame = () => {
+                setGameStarted(false);
+                setScore(0);
+                setLives(3);
+                setTimeLeft(120);
+                setGameOver(false);
+                setPlacedInstruments([]);
+                setPlacedNames({});
+                setCurrentInstrumentIndex(0);
+                setErrorMessage(null);
+                setSuccessMessage(null);
+                setDraggedItem(null);
+                setDraggedName(null);
+                setDraggingId(null);
+                setDraggingNameId(null);
+                setShowQuestion(false);
+                setQuestionData(null);
+                
+                // Detener música
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current.currentTime = 0;
+                    setMusicPlaying(false);
+                }
+            };
+
+            const toggleMusic = () => {
+                if (audioRef.current) {
+                    if (musicPlaying) {
+                        audioRef.current.pause();
+                        setMusicPlaying(false);
+                    } else {
+                        audioRef.current.volume = 0.6; // Volumen aumentado
+                        audioRef.current.play().catch(() => {
+                            setMusicPlaying(false);
+                        });
+                        setMusicPlaying(true);
+                    }
+                }
+            };
+
+            const calculateGrade = () => {
+                const totalItems = placedInstruments.length + Object.keys(placedNames).length;
+                const baseScore = (totalItems / 18) * 18; // 9 instrumentos + 9 nombres = 18 items
+                const timeBonus = timeLeft > 0 ? (timeLeft / 120) * 1.5 : 0;
+                const livesBonus = lives * 0.5;
+                const total = Math.min(20, baseScore + timeBonus + livesBonus);
+                return total.toFixed(2);
+            };
+
+            // Instrumentos disponibles
+            const availableInstruments = instrumentsData.filter(inst => 
+                !placedInstruments.find(placed => placed.id === inst.id)
+            );
+
+            const nextInstrument = instrumentsData[currentInstrumentIndex];
+
+            if (!gameStarted) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-red-900 to-red-700 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-2xl w-full text-center">
+                            <div className="text-6xl mb-4"></div>
+                            <h1 className="text-4xl font-bold text-red-900 mb-4">Mesa de Mayo</h1>
+                            <p className="text-xl text-gray-700 mb-8">
+                                Coloca los instrumentos quirúrgicos en el orden correcto
+                            </p>
+                            <button
+                                onClick={startGame}
+                                className="bg-yellow-500 hover:bg-yellow-600 text-red-900 font-bold text-2xl px-12 py-6 rounded-full shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3 mx-auto cursor-pointer"
+                            >
+                                <Play size={32} /> COMENZAR
+                            </button>
+                            <div className="mt-6 text-gray-600">
+                                <p>⏱️ 5 minutos | ❤️ 3 vidas | 📦 9 instrumentos</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (gameOver) {
+                const grade = calculateGrade();
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100 p-4">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-red-800 text-white p-6 rounded-t-3xl text-center">
+                                <Trophy size={64} className="mx-auto mb-4" />
+                                <h2 className="text-4xl font-bold">
+                                    {placedInstruments.length === 9 && Object.keys(placedNames).length === 9 ? '¡PERFECTO!' : timeLeft === 0 ? 'TIEMPO AGOTADO' : 'JUEGO TERMINADO'}
+                                </h2>
+                            </div>
+                            
+                            <div className="bg-white p-8 rounded-b-3xl shadow-2xl">
+                                <div className="grid md:grid-cols-2 gap-6 mb-8">
+                                    <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-2xl text-center">
+                                        <h3 className="text-xl font-bold text-red-900 mb-4"> CALIFICACIÓN</h3>
+                                        <div className="text-6xl font-bold text-red-800 mb-2">{grade}/20</div>
+                                        <p className="text-gray-700">
+                                            {grade >= 18 ? '¡SOBRESALIENTE!' : grade >= 14 ? '¡MUY BIEN!' : ' Sigue practicando'}
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl">
+                                        <h3 className="text-xl font-bold text-blue-900 mb-4">ESTADÍSTICAS</h3>
+                                        <div className="space-y-2 text-left">
+                                            <p> Instrumentos: {placedInstruments.length}/9</p>
+                                            <p> Nombres: {Object.keys(placedNames).length}/9</p>
+                                            <p> Vidas restantes: {lives}</p>
+                                            <p> Tiempo usado: {300 - timeLeft}s</p>
+                                            <p> Precisión: {placedInstruments.length + Object.keys(placedNames).length > 0 ? (((placedInstruments.length + Object.keys(placedNames).length) / 18) * 100).toFixed(0) : 0}%</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button
+                                    onClick={resetGame}
+                                    className="w-full bg-red-800 hover:bg-red-900 text-white font-bold text-xl px-8 py-4 rounded-full shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3 cursor-pointer"
+                                >
+                                    <RotateCcw size={24} /> JUGAR DE NUEVO
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100">
+                    {/* Audio de fondo - Música suave de juego */}
+                    <audio 
+                        ref={audioRef}
+                        loop
+                        preload="auto"
+                    >
+                        {/* Música de fondo - busca el archivo en la carpeta */}
+                        <source src="musica_fondo.mp3" type="audio/mpeg" />
+                        <source src="musica_fondo.ogg" type="audio/ogg" />
+                        {/* Fallback si no encuentra el archivo */}
+                        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg" />
+                    </audio>
+                    {/* Header - Diseño mejorado con colores claros y responsive */}
+                    <div className="bg-gradient-to-r from-blue-100 to-cyan-100 text-gray-800 p-2 md:p-4 shadow-md border-b-2 border-blue-200">
+                        <h1 className="text-center text-base md:text-xl lg:text-2xl font-bold mb-2 md:mb-3 text-blue-900 px-2">
+                             MESA DE MAYO - Coloca cada instrumento en su posición correcta
+                        </h1>
+                        
+                        <div className="flex flex-wrap justify-center gap-2 md:gap-4 text-xs md:text-sm lg:text-base">
+                            <div className="flex items-center gap-1 md:gap-2 bg-white bg-opacity-80 backdrop-blur-sm px-2 md:px-4 py-1 md:py-2 rounded-full shadow-md border border-blue-200">
+                                <Clock size={16} />
+                                <span className="font-bold text-blue-900 text-xs md:text-sm">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 md:gap-2 bg-white bg-opacity-80 backdrop-blur-sm px-2 md:px-4 py-1 md:py-2 rounded-full shadow-md border border-blue-200">
+                                <Trophy size={16} />
+                                <span className="font-bold text-blue-900 text-xs md:text-sm">{score}/18</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 md:gap-2 bg-white bg-opacity-80 backdrop-blur-sm px-2 md:px-4 py-1 md:py-2 rounded-full shadow-md border border-blue-200">
+                                <Heart size={16} />
+                                <span className="font-bold text-red-600 text-xs md:text-sm">{'❤️'.repeat(lives)}</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-3 flex justify-center gap-2 flex-wrap">
+                            <button
+                                onClick={() => setShowHelp(true)}
+                                className="bg-white bg-opacity-90 backdrop-blur-sm text-blue-900 font-bold px-3 md:px-4 py-2 rounded-full text-xs md:text-sm flex items-center gap-2 cursor-pointer shadow-md border border-blue-200 hover:bg-opacity-100 transition-all"
+                            >
+                                <HelpCircle size={16} /> AYUDA
+                            </button>
+                            {hasAudio && (
+                                <button
+                                    onClick={toggleMusic}
+                                    className="bg-white bg-opacity-90 backdrop-blur-sm text-blue-900 font-bold px-3 md:px-4 py-2 rounded-full text-xs md:text-sm flex items-center gap-2 cursor-pointer shadow-md border border-blue-200 hover:bg-opacity-100 transition-all"
+                                >
+                                    {musicPlaying ? '🔊' : '🔇'} {musicPlaying ? 'SONIDO ON' : 'SONIDO OFF'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Mensajes de feedback - Responsive */}
+                    {errorMessage && (
+                        <div className="fixed top-16 md:top-20 left-1/2 bg-red-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-full shadow-lg z-50 animate-bounce font-semibold text-sm md:text-base" style={{ transform: 'translateX(-50%)', maxWidth: '95%', textAlign: 'center' }}>
+                            {errorMessage}
+                        </div>
+                    )}
+                    
+                    {successMessage && (
+                        <div className="fixed top-16 md:top-20 left-1/2 bg-green-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-full shadow-lg z-50 animate-bounce font-semibold text-sm md:text-base" style={{ transform: 'translateX(-50%)', maxWidth: '95%', textAlign: 'center' }}>
+                            {successMessage}
+                        </div>
+                    )}
+
+                    {/* Game Area - Responsive */}
+                    <div className="p-2 md:p-4 max-w-7xl mx-auto landscape-compact">
+                        {/* Panel de Instrumentos Deslizables - Diseño mejorado y responsive */}
+                        <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl p-3 md:p-4 mb-4 md:mb-6 shadow-lg border-2 border-blue-100">
+                            <h2 className="text-sm md:text-base lg:text-lg font-bold text-gray-800 mb-2 md:mb-3 text-center">
+                                📦 Arrastra el siguiente instrumento: 
+                                <span className="text-yellow-600 ml-2">
+                                    {nextInstrument ? `${nextInstrument.order}/9` : 'Completado'}
+                                </span>
+                            </h2>
+                            <div className="scroll-container">
+                                <div className="flex gap-3 md:gap-4 pb-2" style={{ minWidth: 'max-content' }}>
+                                    {availableInstruments.map(instrument => {
+                                        const isNext = instrument.order === currentInstrumentIndex + 1;
+                                        const isDragging = draggingId === instrument.id;
+                                        
+                                        return (
+                                            <div
+                                                key={instrument.id}
+                                                draggable={isNext && !showQuestion}
+                                                onDragStart={(e) => handleDragStart(e, instrument)}
+                                                onDragEnd={handleDragEnd}
+                                                onTouchStart={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleTouchStart(e, instrument);
+                                                }}
+                                                onTouchEnd={handleTouchEnd}
+                                                onContextMenu={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    return false;
+                                                }}
+                                                className={`bg-white rounded-xl p-2 md:p-3 shadow-lg border-4 flex-shrink-0 transition-all ${
+                                                    isNext && !showQuestion
+                                                        ? 'border-yellow-500 animate-pulse hover:scale-105 cursor-move' 
+                                                        : 'border-gray-300 opacity-50 cursor-not-allowed'
+                                                } ${isDragging ? 'dragging' : ''}`}
+                                                style={{ 
+                                                    width: '120px',
+                                                    minWidth: '120px',
+                                                    touchAction: isNext ? 'none' : 'auto',
+                                                    WebkitTouchCallout: 'none',
+                                                    WebkitUserSelect: 'none',
+                                                    userSelect: 'none'
+                                                }}
+                                            >
+                                                <div 
+                                                    style={{ width: '90px', height: '90px', backgroundColor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
+                                                    onContextMenu={(e) => e.preventDefault()}
+                                                    onTouchStart={(e) => e.stopPropagation()}
+                                                >
+                                                    <img 
+                                                        src={instrument.image} 
+                                                        alt={instrument.name}
+                                                        className="instrument-image mb-2"
+                                                        loading="eager"
+                                                        decoding="async"
+                                                        draggable="false"
+                                                        onContextMenu={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            return false;
+                                                        }}
+                                                        onDragStart={(e) => {
+                                                            e.preventDefault();
+                                                            return false;
+                                                        }}
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            height: '100%', 
+                                                            objectFit: 'contain', 
+                                                            margin: '0 auto',
+                                                            mixBlendMode: 'multiply',
+                                                            filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3)) contrast(1.2) brightness(1.1) saturate(1.1)',
+                                                            backgroundColor: 'transparent',
+                                                            pointerEvents: 'none',
+                                                            WebkitTouchCallout: 'none',
+                                                            WebkitUserSelect: 'none',
+                                                            userSelect: 'none'
+                                                        }}
+                                                        onError={(e) => {
+                                                            console.error('Error cargando imagen:', instrument.image);
+                                                            e.target.style.display = 'none';
+                                                            e.target.parentElement.innerHTML = `<div class="text-2xl mb-1 text-center">${instrument.name.charAt(0)}</div>`;
+                                                        }}
+                                                        onLoad={() => {
+                                                            console.log('Imagen cargada:', instrument.image);
+                                                        }}
+                                                    />
+                                                </div>
+                                                {isNext && (
+                                                    <div className="text-xs text-yellow-600 font-bold text-center mt-1">
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Panel de Nombres - Diseño mejorado y responsive */}
+                        <div className="bg-gradient-to-br from-white to-purple-50 rounded-2xl p-3 md:p-4 mb-4 md:mb-6 shadow-lg border-2 border-purple-100">
+                            <h2 className="text-sm md:text-base lg:text-lg font-bold text-gray-800 mb-2 md:mb-3 text-center">
+                                 Arrastra los nombres debajo de cada instrumento
+                            </h2>
+                            <div className="scroll-container">
+                                <div className="flex flex-wrap gap-2 md:gap-3 justify-center">
+                                    {instrumentsData.map(instrument => {
+                                        const isNamePlaced = placedNames[instrument.position];
+                                        const isDragging = draggingNameId === instrument.id;
+                                        
+                                        return (
+                                            <div
+                                                key={`name-${instrument.id}`}
+                                                draggable={!isNamePlaced && !showQuestion}
+                                                onDragStart={(e) => handleNameDragStart(e, instrument.name, instrument.id)}
+                                                onDragEnd={handleNameDragEnd}
+                                                onTouchStart={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleNameTouchStart(e, instrument.name, instrument.id);
+                                                }}
+                                                onTouchEnd={handleNameTouchEnd}
+                                                onContextMenu={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    return false;
+                                                }}
+                                                className={`bg-white rounded-lg p-2 md:p-2 shadow-md border-2 flex-shrink-0 transition-all ${
+                                                    isNamePlaced 
+                                                        ? 'border-green-500 opacity-50 cursor-not-allowed' 
+                                                        : !showQuestion
+                                                        ? 'border-gray-400 hover:scale-105 cursor-move hover:border-blue-500'
+                                                        : 'border-gray-300 opacity-50 cursor-not-allowed'
+                                                } ${isDragging ? 'dragging' : ''}`}
+                                                style={{ 
+                                                    userSelect: 'none',
+                                                    WebkitUserSelect: 'none',
+                                                    WebkitTouchCallout: 'none',
+                                                    touchAction: !isNamePlaced && !showQuestion ? 'none' : 'auto'
+                                                }}
+                                            >
+                                                <div className="text-xs md:text-sm font-bold text-center px-2 md:px-3 py-1">
+                                                    {isNamePlaced ? '✓ ' : ''}{instrument.name}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Mesa de Mayo - Diseño mejorado y responsive */}
+                        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl md:rounded-3xl p-2 md:p-6 shadow-2xl border-2 md:border-4 border-gray-200 relative">
+                            <div 
+                                ref={mesaRef}
+                                className="relative bg-white rounded-xl md:rounded-2xl border-2 md:border-4 border-gray-400 min-h-[350px] md:min-h-[500px] shadow-inner"
+                                style={{
+                                    background: '#f9fafb',
+                                }}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (!draggedItem || gameOver) return;
+                                    
+                                    // Calcular en qué zona está basándose en coordenadas
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const dropX = ((e.clientX - rect.left) / rect.width) * 100;
+                                    const dropY = ((e.clientY - rect.top) / rect.height) * 100;
+                                    
+                                    // Encontrar la zona más cercana
+                                    let closestZone = null;
+                                    let minDistance = Infinity;
+                                    
+                                    Object.entries(positions).forEach(([posKey, pos]) => {
+                                        const centerX = pos.x + pos.width / 2;
+                                        const centerY = pos.y + pos.height / 2;
+                                        const distance = Math.sqrt(Math.pow(dropX - centerX, 2) + Math.pow(dropY - centerY, 2));
+                                        
+                                        if (distance < minDistance) {
+                                            minDistance = distance;
+                                            closestZone = posKey;
+                                        }
+                                    });
+                                    
+                                    if (closestZone) {
+                                        handleDrop(e, closestZone);
+                                    }
+                                }}
+                            >
+                                {/* Mesa de Mayo - Barra azul horizontal arriba (más corta y con puntas redondeadas) - Sin texto */}
+                                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 h-16 md:h-20 bg-blue-500 rounded-full" style={{ width: '85%' }}>
+                                </div>
+
+                                {/* Zonas de colocación - sin nombres ni categorías */}
+                                {Object.entries(positions).map(([posKey, pos]) => {
+                                    const isPlaced = placedInstruments.find(inst => inst.position === posKey);
+                                    const placedInst = placedInstruments.find(inst => inst.position === posKey);
+                                    
+                                    // Determinar qué clase CSS usar para rotar tijeras y pinzas horizontalmente
+                                    let rotationClass = '';
+                                    if (placedInst) {
+                                        const id = placedInst.id;
+                                        // Todos estos instrumentos deben quedar horizontales como el portaagujas:
+                                        // 1 (Bisturí - más grande), 2 (Tijera de Mayo), 3 (Pinza de Kelly), 
+                                        // 4 (Pinza de Ailis), 5 (Portaagujas), 7 (Pinzas con dientes)
+                                        if (id === 1) {
+                                            rotationClass = 'rotate-horizontal-large';
+                                        } else if ([2, 3, 4, 5, 7].includes(id)) {
+                                            rotationClass = 'rotate-horizontal';
+                                        }
+                                    }
+                                    
+                                    return (
+                                        <div
+                                            key={posKey}
+                                            onDrop={(e) => handleDrop(e, posKey)}
+                                            onDragOver={handleDragOver}
+                                            className="absolute border-2 md:border-4 border-dashed rounded-lg transition-all duration-300 flex flex-col overflow-hidden"
+                                            style={{
+                                                left: `${pos.x}%`,
+                                                top: `${pos.y}%`,
+                                                width: `${pos.width}%`,
+                                                height: `${pos.height}%`,
+                                                borderColor: isPlaced ? '#22c55e' : '#cbd5e1',
+                                                backgroundColor: isPlaced ? 'white' : '#f9fafb',
+                                                zIndex: isPlaced ? 10 : 1,
+                                                cursor: 'pointer',
+                                                padding: '1px',
+                                                boxSizing: 'border-box',
+                                            }}
+                                        >
+                                            {/* Contenido del cuadro - Solo imagen, sin nombres */}
+                                            <div className="flex-1 flex items-center justify-center overflow-hidden instrument-container-white" style={{ padding: '1px', width: '100%', height: '100%', backgroundColor: 'white' }}>
+                                                {isPlaced && placedInst && (
+                                                    <div className="text-center w-full h-full flex flex-col items-center justify-center relative overflow-hidden" style={{ backgroundColor: 'white' }}>
+                                                        <div 
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                        >
+                                                            <img 
+                                                                src={placedInst.image} 
+                                                                alt={placedInst.name}
+                                                                className={`instrument-image ${rotationClass}`}
+                                                                loading="eager"
+                                                                decoding="async"
+                                                                draggable="false"
+                                                                onContextMenu={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    return false;
+                                                                }}
+                                                                onDragStart={(e) => {
+                                                                    e.preventDefault();
+                                                                    return false;
+                                                                }}
+                                                                style={{ 
+                                                                    maxWidth: '110%', 
+                                                                    maxHeight: '110%', 
+                                                                    width: 'auto',
+                                                                    height: 'auto',
+                                                                    objectFit: 'contain',
+                                                                    display: 'block',
+                                                                    // Quitar fondo blanco - método más agresivo
+                                                                    mixBlendMode: 'multiply',
+                                                                    filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3)) contrast(1.2) brightness(1.1) saturate(1.1)',
+                                                                    backgroundColor: 'transparent',
+                                                                    pointerEvents: 'none',
+                                                                    WebkitTouchCallout: 'none',
+                                                                    WebkitUserSelect: 'none',
+                                                                    userSelect: 'none'
+                                                                }}
+                                                                onError={(e) => {
+                                                                    console.error('Error cargando imagen colocada:', placedInst.image);
+                                                                    e.target.style.display = 'none';
+                                                                }}
+                                                                onLoad={() => {
+                                                                    console.log('Imagen colocada cargada:', placedInst.image);
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className="absolute bottom-1 right-1 text-green-600 text-xs md:text-sm z-10">✓</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Zonas para nombres (debajo de cada instrumento) - Con más margen */}
+                                {Object.entries(namePositions).map(([posKey, namePos]) => {
+                                    const placedName = placedNames[posKey];
+                                    const isInstrumentPlaced = placedInstruments.find(inst => inst.position === posKey);
+                                    
+                                    return (
+                                        <div
+                                            key={`name-${posKey}`}
+                                            onDrop={(e) => handleNameDrop(e, posKey)}
+                                            onDragOver={handleDragOver}
+                                            className="absolute border-2 border-dashed rounded transition-all duration-300 flex items-center justify-center"
+                                            style={{
+                                                left: `${namePos.x}%`,
+                                                top: `${namePos.y}%`,
+                                                width: `${namePos.width}%`,
+                                                height: `${namePos.height}%`,
+                                                borderColor: placedName ? '#22c55e' : isInstrumentPlaced ? '#e5e7eb' : '#e5e7eb',
+                                                backgroundColor: placedName ? '#dcfce7' : isInstrumentPlaced ? 'rgba(229, 231, 235, 0.2)' : 'transparent',
+                                                zIndex: 15,
+                                                cursor: isInstrumentPlaced && !placedName ? 'pointer' : 'default',
+                                                minHeight: '18px',
+                                            }}
+                                        >
+                                            {placedName && (
+                                                <div className="text-xs font-bold text-green-700 text-center px-1">
+                                                    {placedName}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                
+                                {/* Zona invisible para capturar drops de nombres en toda la mesa */}
+                                <div
+                                    className="absolute inset-0 z-10"
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        if (!draggedName || !draggingNameId || gameOver) return;
+                                        
+                                        // Calcular en qué zona de nombre está basándose en coordenadas
+                                        const rect = mesaRef.current.getBoundingClientRect();
+                                        const dropX = ((e.clientX - rect.left) / rect.width) * 100;
+                                        const dropY = ((e.clientY - rect.top) / rect.height) * 100;
+                                        
+                                        // Encontrar la zona de nombre más cercana
+                                        let closestZone = null;
+                                        let minDistance = Infinity;
+                                        
+                                        Object.entries(namePositions).forEach(([posKey, namePos]) => {
+                                            const centerX = namePos.x + namePos.width / 2;
+                                            const centerY = namePos.y + namePos.height / 2;
+                                            const distance = Math.sqrt(Math.pow(dropX - centerX, 2) + Math.pow(dropY - centerY, 2));
+                                            
+                                            if (distance < minDistance) {
+                                                minDistance = distance;
+                                                closestZone = posKey;
+                                            }
+                                        });
+                                        
+                                        if (closestZone) {
+                                            handleNameDrop(e, closestZone);
+                                        }
+                                    }}
+                                    onDragOver={handleDragOver}
+                                    style={{ pointerEvents: 'auto' }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Modal de Pregunta para Recuperar Vida */}
+                    {showQuestion && questionData && (
+                        <div 
+                            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50" 
+                            style={{ pointerEvents: 'auto' }}
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    // No permitir cerrar haciendo clic fuera
+                                }
+                            }}
+                        >
+                            <div className="bg-gradient-to-br from-white to-blue-50 rounded-3xl p-8 max-w-2xl w-full shadow-2xl border-4 border-blue-200">
+                                <div className="text-center mb-6">
+                                    <div className="text-5xl mb-4"></div>
+                                    <h2 className="text-3xl font-bold text-blue-900 mb-2">¡Última Oportunidad!</h2>
+                                    <p className="text-lg text-gray-700">Responde correctamente para recuperar una vida</p>
+                                </div>
+                                
+                                <div className="mb-6">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+                                        {questionData.question}
+                                    </h3>
+                                    
+                                    <div className="space-y-3">
+                                        {questionData.options.map((option, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => handleQuestionAnswer(index)}
+                                                className="w-full bg-white hover:bg-blue-100 border-2 border-blue-200 rounded-xl p-4 text-left font-semibold text-gray-800 transition-all hover:scale-105 hover:shadow-md"
+                                            >
+                                                {String.fromCharCode(65 + index)}. {option}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                <div className="text-center text-sm text-gray-600">
+                                    Si respondes incorrectamente, el juego terminará
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Help Modal */}
+                    {showHelp && (
+                        <div 
+                            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                            onClick={() => setShowHelp(false)}
+                        >
+                            <div 
+                                className="bg-white rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-red-900">ℹ️ CÓMO JUGAR</h2>
+                                    <button
+                                        onClick={() => setShowHelp(false)}
+                                        className="text-gray-500 hover:text-gray-700 cursor-pointer"
+                                    >
+                                        <X size={24} />
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-6">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-red-800 mb-2">🎯 Objetivo</h3>
+                                        <p>Coloca los 9 instrumentos quirúrgicos EN ORDEN correcto.</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <h3 className="text-xl font-bold text-red-800 mb-2">🎮 Cómo Jugar</h3>
+                                        <ol className="list-decimal list-inside space-y-2">
+                                            <li>Arrastra los instrumentos desde el panel superior a la mesa en el orden correcto</li>
+                                            <li>Una vez colocado un instrumento, arrastra su nombre desde el panel de nombres</li>
+                                            <li>Coloca el nombre debajo del instrumento correspondiente</li>
+                                            <li>Continúa hasta colocar los 9 instrumentos y sus 9 nombres</li>
+                                        </ol>
+                                    </div>
+                                    
+                                    <div>
+                                        <h3 className="text-xl font-bold text-red-800 mb-2">❤️ Vidas</h3>
+                                        <p>Tienes 3 vidas. Cada error (colocar en posición u orden incorrecto) resta una vida. Si pierdes todas las vidas, tendrás una oportunidad de responder una pregunta para recuperar una vida.</p>
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-xl font-bold text-red-800 mb-2">⏱️ Tiempo</h3>
+                                        <p>Tienes 5 minutos para completar el juego.</p>
+                                    </div>
+                                </div>
+                                
+                                <button
+                                    onClick={() => setShowHelp(false)}
+                                    className="w-full mt-6 bg-red-800 hover:bg-red-900 text-white font-bold py-4 rounded-full cursor-pointer"
+                                >
+                                    ✓ ENTENDIDO
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MesaMayoGame />);
+    </script>
+</body>
+</html>
